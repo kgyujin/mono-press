@@ -4,11 +4,13 @@
  * 작성일: 2026-08-26
  * 변경사항 내역:
  * - 2026-08-26 | 문서 렌더링 | 이미지 상대 경로와 Mermaid 코드 블록 지원
+ * - 2026-08-26 | 코드 문법 강조 | 지정 언어별 highlight.js 결과를 문서 HTML에 연결
  */
 
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 
+import { getCodeLanguageLabel, highlightCode } from './code-highlight';
 import { resolveWorkspaceReference } from './workspace';
 
 export interface RenderMarkdownOptions {
@@ -71,12 +73,19 @@ export function renderMarkdown(
   };
 
   renderer.code = ({ text, lang }) => {
-    if (lang?.trim().toLowerCase() === 'mermaid') {
+    const languageLabel = getCodeLanguageLabel(lang);
+    if (languageLabel?.toLowerCase() === 'mermaid') {
       return `<div class="diagram-shell"><div class="diagram-label"><span class="diagram-label__dot"></span>Mermaid diagram</div><div class="mermaid">${escapeHtml(text)}</div></div>`;
     }
 
-    const language = lang?.trim() ? ` data-language="${escapeAttribute(lang.trim())}"` : '';
-    return `<pre><code${language}>${escapeHtml(text)}</code></pre>`;
+    const highlightedCode = highlightCode(text, languageLabel);
+    const languageAttribute = languageLabel
+      ? ` data-language="${escapeAttribute(languageLabel)}"`
+      : '';
+    const languageClass = highlightedCode.languageClassName
+      ? ` class="${highlightedCode.languageClassName}"`
+      : '';
+    return `<pre${languageAttribute}><code${languageClass}>${highlightedCode.html}</code></pre>`;
   };
 
   const html = marked.parse(source, {

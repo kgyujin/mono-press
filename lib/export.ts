@@ -31,7 +31,20 @@ export const EXPORT_DOCUMENT_CSS = `
   .document img { max-width: 100%; height: auto; }
   .document figure { margin: 30px 0; text-align: center; break-inside: avoid-page; page-break-inside: avoid; }
   .document figcaption { color: #707070; font-size: 12px; margin-top: 9px; }
-  .document pre { overflow: auto; background: #171717; color: #fff; border-radius: 10px; padding: 18px; font-size: 12px; line-height: 1.6; break-inside: avoid-page; page-break-inside: avoid; }
+  .document pre { overflow: auto; background: #171717; color: #fff; border-radius: 10px; padding: 18px; font-size: 12px; line-height: 1.6; position: relative; break-inside: avoid-page; page-break-inside: avoid; }
+  .document pre[data-language] { padding-top: 33px; }
+  .document pre[data-language]::before { color: #959595; content: attr(data-language); font: 9px/1 "SFMono-Regular", Consolas, monospace; letter-spacing: .08em; position: absolute; right: 13px; text-transform: lowercase; top: 12px; }
+  .document pre code.hljs { display: block; overflow-x: auto; }
+  .document pre .hljs-comment, .document pre .hljs-quote { color: #959595; font-style: italic; }
+  .document pre .hljs-keyword, .document pre .hljs-selector-tag, .document pre .hljs-literal, .document pre .hljs-type { color: #dedede; font-weight: 600; }
+  .document pre .hljs-string, .document pre .hljs-doctag, .document pre .hljs-regexp, .document pre .hljs-template-tag { color: #c8c8c8; }
+  .document pre .hljs-number, .document pre .hljs-symbol, .document pre .hljs-bullet, .document pre .hljs-built_in, .document pre .hljs-punctuation, .document pre .hljs-operator { color: #b5b5b5; }
+  .document pre .hljs-title, .document pre .hljs-title.class_, .document pre .hljs-title.function_, .document pre .hljs-section { color: #fff; font-weight: 600; }
+  .document pre .hljs-attr, .document pre .hljs-attribute, .document pre .hljs-variable, .document pre .hljs-template-variable, .document pre .hljs-params { color: #d4d4d4; }
+  .document pre .hljs-meta, .document pre .hljs-tag, .document pre .hljs-name, .document pre .hljs-selector-class, .document pre .hljs-selector-id, .document pre .hljs-selector-pseudo, .document pre .hljs-selector-attr { color: #bdbdbd; }
+  .document pre .hljs-subst { color: #eeeeee; }
+  .document pre .hljs-addition { color: #d8d8d8; }
+  .document pre .hljs-deletion { color: #9f9f9f; }
   .document code { font-family: "SFMono-Regular", Consolas, monospace; font-size: 0.9em; }
   .document :not(pre) > code { background: #f1f1ef; border-radius: 4px; padding: 2px 5px; }
   .document blockquote { border-left: 3px solid #171717; padding-left: 18px; color: #595959; break-inside: avoid-page; page-break-inside: avoid; }
@@ -58,7 +71,19 @@ export const EXPORT_DOCUMENT_CSS = `
     .document { -webkit-print-color-adjust: exact; print-color-adjust: exact; color: #292925; font-size: 12px; line-height: 1.62; }
     .document p, .document ul, .document ol, .document blockquote { color: #292925; line-height: 1.62; }
     .document pre { -webkit-print-color-adjust: exact; print-color-adjust: exact; background: #f2f2ef !important; border: 1px solid #d5d5cf; border-radius: 6px; color: #171717 !important; overflow: visible; padding: 11px 13px; white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; }
-    .document pre code { color: inherit !important; }
+    .document pre[data-language] { padding-top: 27px; }
+    .document pre[data-language]::before { color: #858585; }
+    .document pre code { color: inherit; }
+    .document pre .hljs-comment, .document pre .hljs-quote { color: #777; }
+    .document pre .hljs-keyword, .document pre .hljs-selector-tag, .document pre .hljs-literal, .document pre .hljs-type { color: #292929; }
+    .document pre .hljs-string, .document pre .hljs-doctag, .document pre .hljs-regexp, .document pre .hljs-template-tag { color: #555; }
+    .document pre .hljs-number, .document pre .hljs-symbol, .document pre .hljs-bullet, .document pre .hljs-built_in, .document pre .hljs-punctuation, .document pre .hljs-operator { color: #686868; }
+    .document pre .hljs-title, .document pre .hljs-title.class_, .document pre .hljs-title.function_, .document pre .hljs-section { color: #171717; }
+    .document pre .hljs-attr, .document pre .hljs-attribute, .document pre .hljs-variable, .document pre .hljs-template-variable, .document pre .hljs-params { color: #444; }
+    .document pre .hljs-meta, .document pre .hljs-tag, .document pre .hljs-name, .document pre .hljs-selector-class, .document pre .hljs-selector-id, .document pre .hljs-selector-pseudo, .document pre .hljs-selector-attr { color: #5e5e5e; }
+    .document pre .hljs-subst { color: #333; }
+    .document pre .hljs-addition { color: #333; }
+    .document pre .hljs-deletion { color: #767676; }
     .document :not(pre) > code { color: #292925; }
     .document table { font-size: 11px; }
     .document img { max-height: 220mm; }

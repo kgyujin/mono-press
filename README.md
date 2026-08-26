@@ -15,6 +15,7 @@
 
 - 단일 Markdown 파일 또는 문서 폴더 선택 및 드래그 앤 드롭
 - Markdown, GFM 표, 코드 블록, 인용문 렌더링
+- 언어 지정 코드 블록 문법 강조 — JavaScript/TypeScript, Python, Shell, JSON, HTML/CSS, SQL 등
 - 이미지 상대 경로 자동 해석 및 누락 자산 표시
 - Mermaid 다이어그램 전용 모노크롬 테마
 - 단일 HTML 파일 내보내기 — 이미지 data URL 포함
