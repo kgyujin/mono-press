@@ -8,6 +8,7 @@
  * - 2026-08-26 | 제품 첫 버전 | 로컬 작업 공간과 HTML/PDF 내보내기 구현
  * - 2026-08-26 | 단일 문서 입력 지원 | Markdown 파일만 선택하는 입력 경로 추가
  * - 2026-08-26 | PDF 출력 개선 | 인쇄용 문서 크롬과 페이지 나눔 보강
+ * - 2026-08-26 | 브랜드 마크 정리 | Markdown과 press line을 결합한 mono-press 심볼 적용
  */
 
 import mermaid from 'mermaid';
@@ -72,7 +73,7 @@ npm run dev
 \`\`\`
 `;
 
-const DEMO_MARK = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 120" role="img" aria-label="mono-press mark"><rect width="320" height="120" rx="18" fill="#f0f0ee"/><path d="M48 27h62v20H70v14h34v19H70v13h40v20H48z" fill="#171717"/><path d="M131 27h22v66h38v20h-60z" fill="#171717"/><path d="M211 27h22v66h38v20h-60z" fill="#171717"/><path d="M289 27h-18v86h18z" fill="#171717"/></svg>`;
+const DEMO_MARK = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 160" role="img" aria-label="mono-press logo"><title>mono-press logo</title><desc>An M-shaped folded page pressed into a baseline, paired with the mono-press wordmark.</desc><rect width="560" height="160" rx="24" fill="#f0f0ee"/><rect x="28" y="28" width="104" height="104" rx="20" fill="#171717"/><g transform="translate(41 38) scale(3.25)" fill="#fff"><path d="M4 19.5V4.5h3.35L12 11.2l4.65-6.7H20v15h-3.25v-9.1l-3.2 4.6h-3.1l-3.2-4.6v9.1H4Z"/><path d="M4 21h16" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/></g><text x="172" y="101" fill="#171717" font-family="Inter, Pretendard, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="48" font-weight="700" letter-spacing="-2">mono-press</text></svg>`;
 
 const INITIAL_WORKSPACE: WorkspaceFile[] = normalizeImportedFiles([
   {
@@ -111,8 +112,16 @@ function MarkIcon({ size = 22 }: { size?: number }) {
       width={size}
       fill="none"
     >
-      <path d="M4 4h8v4H8v3h4v4H8v5H4V4Z" fill="currentColor" />
-      <path d="M13 4h4v12h3v4h-7V4Z" fill="currentColor" />
+      <path
+        d="M4 19.5V4.5h3.35L12 11.2l4.65-6.7H20v15h-3.25v-9.1l-3.2 4.6h-3.1l-3.2-4.6v9.1H4Z"
+        fill="currentColor"
+      />
+      <path
+        d="M4 21h16"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="1.5"
+      />
     </svg>
   );
 }

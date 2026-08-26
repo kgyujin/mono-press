@@ -1,9 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 120" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" role="img" aria-labelledby="title desc">
   <title id="title">mono-press mark</title>
-  <desc id="desc">A black and white monogram made from a document and press shape.</desc>
-  <rect width="320" height="120" rx="18" fill="#f0f0ee"/>
-  <path d="M48 27h62v20H70v14h34v19H70v13h40v20H48z" fill="#171717"/>
-  <path d="M131 27h22v66h38v20h-60z" fill="#171717"/>
-  <path d="M211 27h22v66h38v20h-60z" fill="#171717"/>
-  <path d="M289 27h-18v86h18z" fill="#171717"/>
+  <desc id="desc">An M-shaped folded page pressed into a baseline.</desc>
+  <rect width="160" height="160" rx="32" fill="#171717"/>
+  <g transform="translate(20 15) scale(5)" fill="#fff">
+    <path d="M4 19.5V4.5h3.35L12 11.2l4.65-6.7H20v15h-3.25v-9.1l-3.2 4.6h-3.1l-3.2-4.6v9.1H4Z"/>
+    <path d="M4 21h16" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+  </g>
 </svg>

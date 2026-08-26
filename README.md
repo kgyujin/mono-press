@@ -1,6 +1,6 @@
 # mono-press (MonoPress)
 
-![mono-press mark](./public/mono-press-mark.svg)
+![mono-press logo](./public/mono-press-logo.svg)
 
 [![Status](https://img.shields.io/badge/status-beta-171717?style=flat-square)](https://github.com/kgyujin/mono-press)
 [![Built with React](https://img.shields.io/badge/built%20with-React-171717?style=flat-square&logo=react&logoColor=white)](https://react.dev/)
@@ -8,6 +8,18 @@
 [![Vercel ready](https://img.shields.io/badge/deploy-Vercel%20ready-171717?style=flat-square&logo=vercel&logoColor=white)](https://vercel.com/)
 
 > A local-first Markdown publisher for clean HTML and monochrome PDF documents.
+
+## Brand mark
+
+mono-press의 공식 로고는 `M` 형태의 접힌 문서와 아래의 press line으로 구성합니다.
+
+![mono-press mark](./public/mono-press-mark.svg)
+
+- `M`: mono와 Markdown의 첫 글자이자, 두 페이지 면이 한 문서로 접히는 형태
+- 중앙 접힘: Markdown 구조가 읽기 쉬운 문서로 정리되는 과정
+- 아래 수평선: press의 기준선, 즉 인쇄·출판 가능한 결과물
+
+사이트 헤더와 로고는 심볼과 `mono-press` 워드마크를 함께 사용하고, favicon과 작은 UI에서는 같은 심볼만 사용합니다. 따라서 크기가 달라도 하나의 브랜드 언어로 인식됩니다.
 
 `mono-press`는 Markdown 파일 하나만 업로드하는 대신 문서와 이미지·Mermaid 파일이 들어 있는 **상위 폴더를 작업 공간으로 불러오는 변환 사이트**입니다. 상대 경로를 자동으로 연결하고, 흑백 문서 시스템으로 렌더링한 뒤 HTML과 PDF로 내보냅니다.
 
