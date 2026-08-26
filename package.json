@@ -6,13 +6,14 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "dev": "vinext dev",
-    "build": "vinext build",
-    "start": "vinext start",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "test": "node --experimental-strip-types --test tests/*.test.ts"
   },
   "dependencies": {
+    "@vercel/analytics": "^2.0.1",
     "dompurify": "^3.4.14",
     "marked": "^18.0.11",
     "mermaid": "^11.17.2",

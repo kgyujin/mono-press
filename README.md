@@ -64,7 +64,7 @@ flowchart LR
 | --- | --- |
 | `npm run dev` | Start the local development server |
 | `npm run lint` | Check the project with ESLint |
-| `npm run build` | Create a production build |
+| `npm run build` | Create a Vercel-compatible Next.js production build |
 
 ## Vercel deployment
 
@@ -73,7 +73,8 @@ flowchart LR
 1. GitHub 저장소를 Vercel 프로젝트에 연결합니다.
 2. Framework Preset은 Next.js를 사용합니다.
 3. Build Command는 `npm run build`를 사용합니다.
-4. 별도 환경변수 없이 로컬 파일 처리 기능을 사용할 수 있습니다.
+4. Output Directory는 비워 두어 Next.js 기본 출력 디렉터리(`.next`)를 사용합니다.
+5. 별도 환경변수 없이 로컬 파일 처리 기능을 사용할 수 있습니다.
 
 문서 파일은 브라우저에서 선택한 뒤 기기 안에서만 처리됩니다. 서버 저장 기능이나 인증을 추가할 때는 이 로컬 우선 원칙을 별도로 검토해야 합니다.
 
