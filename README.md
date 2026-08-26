@@ -18,7 +18,7 @@
 - 이미지 상대 경로 자동 해석 및 누락 자산 표시
 - Mermaid 다이어그램 전용 모노크롬 테마
 - 단일 HTML 파일 내보내기 — 이미지 data URL 포함
-- A4 인쇄 레이아웃을 사용하는 PDF 내보내기
+- 인쇄 안전 코드 블록, 문서 헤더·푸터, 페이지 번호를 포함한 A4 PDF 출력
 - 문서 원본을 서버에 업로드하지 않는 로컬 우선 처리
 - 반응형 Split / Preview 작업 화면
 
@@ -67,6 +67,14 @@ flowchart LR
 | `npm run dev` | Start the local development server |
 | `npm run lint` | Check the project with ESLint |
 | `npm run build` | Create a Vercel-compatible Next.js production build |
+
+## PDF output
+
+`PDF` 버튼은 브라우저의 인쇄 대화상자를 열고, 문서 본문만 A4 인쇄 레이아웃으로 표시합니다. 대화상자에서 대상 프린터를 `Save as PDF`로 선택하고 배율은 100%로 두면 됩니다. mono-press가 문서 제목, 파일명, 페이지 번호를 인쇄용 헤더·푸터로 추가하므로 브라우저의 `Headers and footers` 옵션은 끄는 것을 권장합니다.
+
+코드 블록은 배경 그래픽 설정에 의존하지 않도록 흰색 바탕과 검은색 글자로 출력됩니다. 로컬 이미지와 Mermaid 다이어그램까지 포함하려면 단일 Markdown 파일이 아니라 해당 파일이 들어 있는 상위 폴더를 먼저 선택하세요.
+
+문서 헤더·푸터와 페이지 번호는 Chromium 계열 브라우저에서 가장 안정적으로 표시됩니다.
 
 ## Vercel deployment
 

@@ -7,6 +7,7 @@
  * 변경사항 내역:
  * - 2026-08-26 | 제품 첫 버전 | 로컬 작업 공간과 HTML/PDF 내보내기 구현
  * - 2026-08-26 | 단일 문서 입력 지원 | Markdown 파일만 선택하는 입력 경로 추가
+ * - 2026-08-26 | PDF 출력 개선 | 인쇄용 문서 크롬과 페이지 나눔 보강
  */
 
 import mermaid from 'mermaid';
@@ -261,6 +262,20 @@ export default function Home() {
     () => getDocumentTitle(markdown, selectedDocument?.name ?? 'Untitled document'),
     [markdown, selectedDocument?.name],
   );
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const toCssString = (value: string) => JSON.stringify(value.replace(/[\r\n]+/g, ' ').trim());
+    root.style.setProperty('--print-document-title', toCssString(documentTitle));
+    root.style.setProperty('--print-document-name', toCssString(selectedDocument?.name ?? 'Untitled.md'));
+
+    return () => {
+      root.style.removeProperty('--print-document-title');
+      root.style.removeProperty('--print-document-name');
+    };
+  }, [documentTitle, selectedDocument?.name]);
+
+  const hasDocumentHeading = useMemo(() => /^#\s+.+$/m.test(markdown), [markdown]);
   const missingReferences = useMemo(
     () => findMissingAssetReferences(markdown, selectedDocumentPath, workspaceFiles),
     [markdown, selectedDocumentPath, workspaceFiles],
@@ -422,6 +437,7 @@ export default function Home() {
     const html = await createStandaloneHtml({
       assetUrlToFile,
       body,
+      documentName: selectedDocument?.name,
       documentTitle,
       workspaceFiles,
     });
@@ -431,7 +447,7 @@ export default function Home() {
       'text/html;charset=utf-8',
     );
     setNotice('Standalone HTML downloaded');
-  }, [assetUrlToFile, documentTitle, renderedHtml, workspaceFiles]);
+  }, [assetUrlToFile, documentTitle, renderedHtml, selectedDocument?.name, workspaceFiles]);
 
   const handleExportPdf = useCallback(() => {
     const previousTitle = document.title;
@@ -440,7 +456,7 @@ export default function Home() {
     window.setTimeout(() => {
       document.title = previousTitle;
     }, 1000);
-    setNotice('Print dialog opened');
+    setNotice('Print dialog opened — choose Save as PDF');
   }, [documentTitle]);
 
   useEffect(() => {
@@ -567,7 +583,7 @@ export default function Home() {
                 <button className={activeView === 'preview' ? 'is-active' : ''} onClick={() => setActiveView('preview')} type="button">Preview</button>
               </div>
               <button className="outline-button" onClick={handleExportHtml} type="button"><ArrowUpIcon size={14} /> HTML</button>
-              <button className="primary-button" onClick={handleExportPdf} type="button"><DownloadIcon size={14} /> PDF</button>
+              <button aria-label="PDF로 저장하기" className="primary-button" onClick={handleExportPdf} title="Print / Save as PDF" type="button"><DownloadIcon size={14} /> PDF</button>
             </div>
           </div>
 
@@ -606,6 +622,13 @@ export default function Home() {
                 <div className="panel-label"><span className="panel-label-number">02</span><span>Published preview</span></div>
                 <span className="preview-format"><span className="status-dot" /> HTML</span>
               </div>
+              {!hasDocumentHeading ? (
+                <section className="print-title-block">
+                  <span className="print-title-kicker">mono-press / DOCUMENT</span>
+                  <h1>{documentTitle}</h1>
+                  <p>{selectedDocument?.name ?? 'Untitled.md'}</p>
+                </section>
+              ) : null}
               <article className="article-preview" ref={previewRef} />
               <div className="preview-footer"><span>Paper / A4</span><span>Monochrome system</span></div>
             </section>
@@ -615,7 +638,7 @@ export default function Home() {
             <div className="status-message"><span className={`status-message-dot${missingReferences.length ? ' is-warning' : ''}`} />{notice}</div>
             <div className="status-links">
               {missingReferences.length ? <span className="warning-link"><AlertIcon size={13} /> {missingReferences.length} missing asset{missingReferences.length > 1 ? 's' : ''}</span> : <span><CheckIcon size={13} /> All references resolved</span>}
-              <span className="status-shortcut"><span className="shortcut-key">⌘</span><span className="shortcut-key">P</span> export PDF</span>
+              <span className="status-shortcut"><span className="shortcut-key">⌘</span><span className="shortcut-key">P</span> save PDF</span>
             </div>
           </div>
         </section>
