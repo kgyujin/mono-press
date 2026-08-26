@@ -2,10 +2,11 @@
 
 /**
  * 작성자: Git 이력 참조
- * 작성목적: mono-press의 폴더 기반 Markdown 편집·미리보기·내보내기 화면을 제공한다.
+ * 작성목적: mono-press의 파일·폴더 기반 Markdown 편집·미리보기·내보내기 화면을 제공한다.
  * 작성일: 2026-08-26
  * 변경사항 내역:
  * - 2026-08-26 | 제품 첫 버전 | 로컬 작업 공간과 HTML/PDF 내보내기 구현
+ * - 2026-08-26 | 단일 문서 입력 지원 | Markdown 파일만 선택하는 입력 경로 추가
  */
 
 import mermaid from 'mermaid';
@@ -31,7 +32,7 @@ import {
 
 const DEMO_MARKDOWN = `# mono-press로 문서 출판하기
 
-문서 폴더를 선택하면 이미지와 다이어그램의 상대 경로를 자동으로 연결합니다. 작성한 Markdown은 화면에서 바로 읽기 좋은 문서로 바뀌고, 그대로 HTML이나 PDF로 내보낼 수 있습니다.
+Markdown 파일 하나를 바로 열거나 문서 폴더를 선택하면 이미지와 다이어그램의 상대 경로를 자동으로 연결합니다. 작성한 Markdown은 화면에서 바로 읽기 좋은 문서로 바뀌고, 그대로 HTML이나 PDF로 내보낼 수 있습니다.
 
 ![mono-press mark](./assets/mono-mark.svg)
 
@@ -60,8 +61,8 @@ flowchart LR
 
 ## 시작하기
 
-1. Markdown 파일과 이미지가 들어 있는 상위 폴더를 선택합니다.
-2. 왼쪽 파일 트리에서 문서를 고릅니다.
+1. Markdown 파일 하나를 열거나, 이미지가 들어 있는 상위 폴더를 선택합니다.
+2. 폴더를 열었다면 왼쪽 파일 트리에서 문서를 고릅니다.
 3. 필요한 내용을 편집하고 오른쪽 미리보기를 확인합니다.
 4. HTML 또는 PDF 버튼으로 저장합니다.
 
@@ -241,6 +242,7 @@ export default function Home() {
   const [activeView, setActiveView] = useState<'split' | 'preview'>('split');
   const [notice, setNotice] = useState('Demo workspace loaded');
   const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   const previewRef = useRef<HTMLElement>(null);
 
@@ -346,8 +348,22 @@ export default function Home() {
     setWorkspaceName(name || getFolderNameFromPath(firstDocument.path));
     setSelectedDocumentPath(firstDocument.path);
     setMarkdown(await firstDocument.file.text());
-    setNotice(`${normalizedFiles.length} files connected`);
+    setNotice(`${normalizedFiles.length} ${normalizedFiles.length === 1 ? 'file' : 'files'} connected`);
   }, []);
+
+  const handleChooseFile = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const handleFileInput = useCallback(
+    async (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      await loadWorkspace([{ file, path: file.name }], 'Single document');
+      event.target.value = '';
+    },
+    [loadWorkspace],
+  );
 
   const handleChooseFolder = useCallback(async () => {
     const directoryPicker = window as DirectoryPickerWindow;
@@ -456,6 +472,14 @@ export default function Home() {
       onDrop={handleDrop}
     >
       <input
+        ref={fileInputRef}
+        accept=".md,.markdown,.mdx,text/markdown"
+        aria-label="문서 파일 선택"
+        className="visually-hidden"
+        onChange={handleFileInput}
+        type="file"
+      />
+      <input
         ref={folderInputRef}
         aria-label="문서 폴더 선택"
         className="visually-hidden"
@@ -474,10 +498,16 @@ export default function Home() {
           <span className="status-dot" />
           <span>Local workspace</span>
         </div>
-        <button className="ghost-button topbar-folder-button" onClick={handleChooseFolder} type="button">
-          <FolderIcon size={15} />
-          <span>Open folder</span>
-        </button>
+        <div className="topbar-open-actions">
+          <button className="ghost-button topbar-open-button" onClick={handleChooseFile} type="button">
+            <FileIcon kind="markdown" size={15} />
+            <span>Open file</span>
+          </button>
+          <button className="ghost-button topbar-open-button" onClick={handleChooseFolder} type="button">
+            <FolderIcon size={15} />
+            <span>Open folder</span>
+          </button>
+        </div>
       </header>
 
       <div className="workspace-layout">
@@ -613,12 +643,12 @@ export default function Home() {
             <button onClick={handleExportHtml} type="button">Download HTML <ArrowUpIcon size={13} /></button>
           </div>
 
-          <div className="drop-hint"><span className="drop-hint-icon"><FolderIcon size={14} /></span><span><strong>Tip</strong> Drop a document folder anywhere on this window.</span></div>
+          <div className="drop-hint"><span className="drop-hint-icon"><FolderIcon size={14} /></span><span><strong>Tip</strong> Drop a Markdown file or document folder anywhere on this window.</span></div>
         </aside>
       </div>
 
       <div className="drag-overlay" aria-hidden="true">
-        <div className="drag-overlay-card"><span className="drag-overlay-icon"><FolderIcon size={25} /></span><strong>Drop your document folder</strong><span>Markdown and assets will be linked automatically.</span></div>
+        <div className="drag-overlay-card"><span className="drag-overlay-icon"><FolderIcon size={25} /></span><strong>Drop a Markdown file or folder</strong><span>Folder assets will be linked automatically.</span></div>
       </div>
     </main>
   );

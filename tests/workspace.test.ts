@@ -16,6 +16,16 @@ test('strips the selected folder name from imported relative paths', () => {
   assert.deepEqual(files.map((file) => file.path), ['assets/diagram.png', 'guide.md']);
 });
 
+test('keeps a standalone Markdown file addressable as a workspace document', () => {
+  const [file] = normalizeImportedFiles([
+    { file: new File(['# Guide'], 'guide.md'), path: 'guide.md' },
+  ]);
+
+  assert.equal(file.path, 'guide.md');
+  assert.equal(file.name, 'guide.md');
+  assert.equal(file.kind, 'markdown');
+});
+
 test('resolves references relative to the Markdown document directory', () => {
   assert.equal(
     resolveWorkspaceReference('chapters/intro.md', '../assets/diagram.png'),

@@ -28,6 +28,7 @@ button { color: inherit; }
 .brand-name { font-size: 15px; font-weight: 700; letter-spacing: -.04em; }
 .brand-version { border: 1px solid var(--line); border-radius: 4px; color: var(--muted); font: 9px var(--font-mono); letter-spacing: .08em; padding: 4px 5px; }
 .topbar-status { color: var(--muted); font: 11px var(--font-mono); gap: 7px; margin-left: auto; margin-right: 24px; }
+.topbar-open-actions { align-items: center; display: flex; gap: 8px; }
 .status-dot, .document-live-dot { background: #343434; border-radius: 50%; display: inline-block; height: 6px; width: 6px; }
 .ghost-button, .outline-button, .primary-button, .icon-button { align-items: center; border-radius: 7px; cursor: pointer; display: inline-flex; gap: 8px; justify-content: center; transition: background .18s ease, border-color .18s ease, color .18s ease, transform .18s ease; }
 .ghost-button { background: transparent; border: 1px solid var(--line); font-size: 12px; padding: 9px 12px; }
@@ -170,8 +171,8 @@ button { color: inherit; }
 @media (max-width: 820px) {
   .topbar { height: 60px; padding: 0 17px; }
   .topbar-status { display: none; }
-  .topbar-folder-button { padding: 8px; }
-  .topbar-folder-button span { display: none; }
+  .topbar-open-button { padding: 8px; }
+  .topbar-open-button span { display: none; }
   .workspace-layout { display: block; }
   .sidebar { border-bottom: 1px solid var(--line); border-right: 0; padding: 17px; }
   .sidebar-heading { padding: 0; }
