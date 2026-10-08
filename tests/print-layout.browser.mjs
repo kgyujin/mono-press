@@ -9,11 +9,12 @@ import { readFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import test from 'node:test';
+import { SHARED_PRINT_CSS } from '../lib/print-styles.ts';
 import { EXPORT_DOCUMENT_CSS } from '../lib/export.ts';
 
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const outputDirectory = process.env.PRINT_QA_DIR || join(tmpdir(), 'monopress-print-regression');
-const appCss = await readFile(new URL('../app/globals.css', import.meta.url), 'utf8');
+const appCss = (await readFile(new URL('../app/globals.css', import.meta.url), 'utf8')) + SHARED_PRINT_CSS;
 const scenarios = [
   { name: 'tall', direction: 'TD', count: 16, spacer: 0 },
   { name: 'wide', direction: 'LR', count: 10, spacer: 0 },
@@ -63,6 +64,38 @@ test('app and standalone print keep complete diagrams within one A4 page', async
         await page.close();
       }
     }
+  } finally {
+    await browser.close();
+  }
+});
+
+test('app and standalone share print typography and element spacing', async () => {
+  const browser = await chromium.launch({ channel: 'chrome', headless: true });
+  const title = '<section class="print-title-block"><span class="print-title-kicker">mono-press / DOCUMENT</span><h1>Title</h1><p>notes.md</p></section>';
+  const body = '<h1>Heading</h1><h2>Section</h2><h3>Subsection</h3><p>Text <strong>bold</strong> <a href="#">link</a> <code>inline</code></p><ul><li>Bullet</li></ul><ol><li>Number</li></ol><blockquote>Quote</blockquote><pre><code>code</code></pre><table><thead><tr><th>Header</th></tr></thead><tbody><tr><td>Cell</td></tr></tbody></table><figure class="document-figure"><img src="data:image/svg+xml,%3Csvg xmlns=\"http://www.w3.org/2000/svg\" width=\"10\" height=\"10\"/%3E"><figcaption>Image</figcaption></figure><div class="diagram-shell"><div class="diagram-label"><span class="diagram-label__dot"></span>Mermaid</div><div class="mermaid"><svg></svg></div></div><hr>';
+  const snapshots = [];
+  try {
+    for (const [mode, css] of [['app', appCss], ['standalone', EXPORT_DOCUMENT_CSS]]) {
+      const page = await browser.newPage();
+      await page.setContent(`<style>${css}</style>${mode === 'app' ? `${title}<article class="article-preview">${body}</article>` : `<main class="document">${title}${body}</main>`}`);
+      await page.emulateMedia({ media: 'print' });
+      snapshots.push(await page.evaluate(() => {
+        const root = document.querySelector('.article-preview, .document');
+        const selectors = ['h1', 'h2', 'h3', 'p', 'strong', 'a', 'p code', 'ul', 'ol', 'li', 'blockquote', 'pre', 'pre code', 'table', 'th', 'td', 'figure', 'img', 'figcaption', '.diagram-shell', '.diagram-label', '.diagram-label__dot', 'hr'];
+        const properties = ['font-family', 'font-size', 'font-weight', 'line-height', 'letter-spacing', 'color', 'background-color', 'margin-top', 'margin-bottom', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left', 'border-top-width', 'border-top-color', 'border-radius', 'list-style-type', 'box-sizing'];
+        const readStyle = (element) => {
+          const style = getComputedStyle(element);
+          return Object.fromEntries(properties.map(property => [property, style.getPropertyValue(property)]));
+        };
+        return Object.fromEntries([
+          ...selectors.map(selector => [selector, readStyle(root.querySelector(['h1', 'h2', 'h3', 'p'].includes(selector) ? `:scope > ${selector}` : selector))]),
+          ['title h1', readStyle(document.querySelector('.print-title-block h1'))],
+          ['title p', readStyle(document.querySelector('.print-title-block p'))],
+        ]);
+      }));
+      await page.close();
+    }
+    assert.deepEqual(snapshots[0], snapshots[1]);
   } finally {
     await browser.close();
   }

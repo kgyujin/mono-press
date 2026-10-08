@@ -23,8 +23,11 @@ import {
   type DragEvent,
 } from 'react';
 
-import { loadDraftWorkspace, saveDraftWorkspace } from '@/lib/drafts';
+import { loadDraftWorkspace, saveDraftWorkspace, createWorkspaceId, listDraftWorkspaces, clearDraftWorkspaces, type DraftWorkspace } from '@/lib/drafts';
+import { collectDirectoryFiles, collectDroppedFiles, filterImportedFiles } from '@/lib/imports';
 import { createStandaloneHtml, downloadTextFile } from '@/lib/export';
+import { SHARED_PRINT_CSS } from '@/lib/print-styles';
+import { waitForPreviewAssets } from '@/lib/preview-ready';
 import { getDocumentTitle, renderMarkdown } from '@/lib/markdown';
 import {
   findMissingAssetReferences,
@@ -215,24 +218,6 @@ function SparkIcon({ size = 15 }: { size?: number }) {
   );
 }
 
-function collectFileEntries(
-  directory: DirectoryHandle,
-  prefix = '',
-): Promise<ImportedFile[]> {
-  return (async () => {
-    const entries: ImportedFile[] = [];
-    for await (const entry of directory.values()) {
-      const path = prefix ? `${prefix}/${entry.name}` : entry.name;
-      if (entry.kind === 'file') {
-        entries.push({ file: await entry.getFile(), path });
-      } else {
-        entries.push(...(await collectFileEntries(entry, path)));
-      }
-    }
-    return entries;
-  })();
-}
-
 function getFolderNameFromPath(path: string): string {
   return path.split('/')[0] || 'workspace';
 }
@@ -254,6 +239,13 @@ export default function Home() {
   const [activeView, setActiveView] = useState<'split' | 'preview'>('split');
   const [notice, setNotice] = useState('Demo workspace loaded');
   const [isDragging, setIsDragging] = useState(false);
+  const [workspaceId, setWorkspaceId] = useState('');
+  const [recentWorkspaces, setRecentWorkspaces] = useState<Array<{workspaceId: string; workspaceName: string; selectedDocumentPath: string}>>([]);
+  const [isClearingStorage, setIsClearingStorage] = useState(false);
+  const [isStoragePaused, setIsStoragePaused] = useState(false);
+  const skipSaveRef = useRef(false);
+  const revisionsRef = useRef(new Map<string, number>());
+  const savesRef = useRef<Promise<void>>(Promise.resolve());
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [isRestoring, setIsRestoring] = useState(true);
   const [saveStatus, setSaveStatus] = useState('Restoring local draft…');
@@ -264,39 +256,95 @@ export default function Home() {
   const folderInputRef = useRef<HTMLInputElement>(null);
   const previewRef = useRef<HTMLElement>(null);
 
+  const applyWorkspace = useCallback((snapshot: DraftWorkspace) => {
+    skipSaveRef.current = true;
+    revisionsRef.current.set(snapshot.workspaceId, snapshot.revision);
+    setWorkspaceId(snapshot.workspaceId);
+    setWorkspaceFiles(snapshot.workspaceFiles);
+    setWorkspaceName(snapshot.workspaceName);
+    setSelectedDocumentPath(snapshot.selectedDocumentPath);
+    setDrafts(snapshot.drafts);
+    setMarkdown(snapshot.markdown);
+    setIsStoragePaused(false);
+    setSaveStatus('Saved locally');
+    try { sessionStorage.setItem('mono-press-active', snapshot.workspaceId); } catch {}
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
-    void loadDraftWorkspace().then((snapshot) => {
-      if (cancelled || !snapshot) return;
-      setWorkspaceFiles(snapshot.workspaceFiles);
-      setWorkspaceName(snapshot.workspaceName);
-      setSelectedDocumentPath(snapshot.selectedDocumentPath);
-      setDrafts(snapshot.drafts);
-      setMarkdown(snapshot.markdown);
-      setNotice('Local draft restored');
-    }).catch(() => {
+    void (async () => {
+      let activeId: string | undefined;
+      try { activeId = sessionStorage.getItem('mono-press-active') || undefined; } catch {}
+      const demoId = await createWorkspaceId('mono-press-demo', INITIAL_WORKSPACE);
+      if (!cancelled) setWorkspaceId(demoId);
+      const snapshot = await loadDraftWorkspace(activeId);
+      if (cancelled) return;
+      if (snapshot) {
+        applyWorkspace(snapshot);
+        setNotice('Local draft restored');
+      }
+      if (!cancelled) setRecentWorkspaces(await listDraftWorkspaces());
+    })().catch(() => {
       if (!cancelled) setNotice('저장된 초안을 복원하지 못했습니다');
     }).finally(() => {
       if (!cancelled) setIsRestoring(false);
     });
     return () => { cancelled = true; };
+  }, [applyWorkspace]);
+
+  useEffect(() => {
+    if (isRestoring || isStoragePaused) return;
+    if (skipSaveRef.current) { skipSaveRef.current = false; return; }
+    let cancelled = false;
+    const snapshot = { workspaceId, workspaceFiles, workspaceName, selectedDocumentPath, drafts, markdown };
+    savesRef.current = savesRef.current.catch(() => {}).then(async () => {
+      const revision = await saveDraftWorkspace({ ...snapshot, revision: revisionsRef.current.get(workspaceId) ?? 0 });
+      revisionsRef.current.set(workspaceId, revision);
+      if (!cancelled) {
+        setSaveStatus('Saved locally');
+        setRecentWorkspaces(await listDraftWorkspaces());
+        try { sessionStorage.setItem('mono-press-active', workspaceId); } catch {}
+      }
+    }).catch((error: Error) => {
+      if (!cancelled) setSaveStatus(error.name === 'DraftConflictError'
+        ? '다른 탭에서 수정했습니다 — Markdown을 다운로드하고 최근 작업에서 다시 여세요'
+        : '저장 실패 — Markdown을 다운로드하세요');
+    });
+    return () => { cancelled = true; };
+  }, [workspaceId, workspaceFiles, workspaceName, selectedDocumentPath, drafts, markdown, isRestoring, isStoragePaused]);
+
+  const restoreRecent = useCallback(async (id: string) => {
+    setIsRestoring(true);
+    try {
+      await savesRef.current;
+      const snapshot = await loadDraftWorkspace(id);
+      if (snapshot) { applyWorkspace(snapshot); setNotice('Local draft restored'); }
+      else setNotice('삭제된 작업 공간입니다');
+    } catch { setNotice('초안을 복원하지 못했습니다'); }
+    finally { setIsRestoring(false); }
+  }, [applyWorkspace]);
+
+  const clearSavedWorkspaces = useCallback(async () => {
+    if (!window.confirm('브라우저에 저장된 모든 초안을 삭제할까요? 현재 화면은 유지됩니다.')) return;
+    setIsClearingStorage(true);
+    setIsStoragePaused(true);
+    try {
+      await savesRef.current;
+      await clearDraftWorkspaces();
+      revisionsRef.current.clear();
+      setRecentWorkspaces([]);
+      setSaveStatus('저장된 초안 삭제됨 — 다시 편집하면 저장됩니다');
+      try { sessionStorage.removeItem('mono-press-active'); } catch {}
+    } catch { setNotice('저장된 초안을 삭제하지 못했습니다'); }
+    finally { setIsClearingStorage(false); }
   }, []);
 
   useEffect(() => {
-    if (isRestoring) return;
-    let cancelled = false;
-    void saveDraftWorkspace({ workspaceFiles, workspaceName, selectedDocumentPath, drafts, markdown })
-      .then(() => { if (!cancelled) setSaveStatus('Saved locally'); })
-      .catch(() => { if (!cancelled) setSaveStatus('저장 실패 — 이 창을 닫지 말고 HTML로 내보내세요'); });
-    return () => { cancelled = true; };
-  }, [workspaceFiles, workspaceName, selectedDocumentPath, drafts, markdown, isRestoring]);
-
-  useEffect(() => {
-    if (saveStatus === 'Saved locally') return;
+    if (saveStatus === 'Saved locally' || isStoragePaused) return;
     const warnBeforeClose = (event: BeforeUnloadEvent) => { event.preventDefault(); };
     window.addEventListener('beforeunload', warnBeforeClose);
     return () => window.removeEventListener('beforeunload', warnBeforeClose);
-  }, [saveStatus]);
+  }, [saveStatus, isStoragePaused]);
 
   useEffect(() => {
     // Safari and Firefox do not expose the directory picker method, so the
@@ -408,25 +456,38 @@ export default function Home() {
   }, [renderedHtml]);
 
   const loadWorkspace = useCallback(async (importedFiles: ImportedFile[], name: string) => {
-    const selectionRevision = ++selectionRevisionRef.current;
-    const normalizedFiles = normalizeImportedFiles(importedFiles);
-    const firstDocument = normalizedFiles.find((file) => file.kind === 'markdown');
+    setIsRestoring(true);
+    try {
+      const selectionRevision = ++selectionRevisionRef.current;
+      let filtered;
+      try { filtered = filterImportedFiles(importedFiles); } catch (error) { setNotice((error as Error).message); return; }
+      const normalizedFiles = normalizeImportedFiles(filtered.files);
+      const firstDocument = normalizedFiles.find((file) => file.kind === 'markdown');
 
-    if (!firstDocument) {
-      setNotice('Markdown 파일을 찾지 못했습니다');
-      return;
-    }
+      if (!firstDocument) {
+        setNotice('Markdown 파일을 찾지 못했습니다');
+        return;
+      }
 
-    const source = await firstDocument.file.text();
-    if (selectionRevision !== selectionRevisionRef.current) return;
-    setDrafts({});
-    setSaveStatus('Saving locally…');
-    setWorkspaceFiles(normalizedFiles);
-    setWorkspaceName(name || getFolderNameFromPath(firstDocument.path));
-    setSelectedDocumentPath(firstDocument.path);
-    setMarkdown(source);
-    setNotice(`${normalizedFiles.length} ${normalizedFiles.length === 1 ? 'file' : 'files'} connected`);
-  }, []);
+      await savesRef.current;
+      const id = await createWorkspaceId(name, normalizedFiles);
+      const existing = await loadDraftWorkspace(id).catch(() => null);
+      if (selectionRevision !== selectionRevisionRef.current) return;
+      if (existing) { applyWorkspace(existing); setNotice('저장된 초안을 복원했습니다'); return; }
+      const source = await firstDocument.file.text();
+      if (selectionRevision !== selectionRevisionRef.current) return;
+      setWorkspaceId(id);
+      revisionsRef.current.set(id, 0);
+      setIsStoragePaused(false);
+      setDrafts({});
+      setSaveStatus('Saving locally…');
+      setWorkspaceFiles(normalizedFiles);
+      setWorkspaceName(name || getFolderNameFromPath(firstDocument.path));
+      setSelectedDocumentPath(firstDocument.path);
+      setMarkdown(source);
+      setNotice(`${normalizedFiles.length} files connected · ${filtered.rejectedCount} excluded`);
+    } finally { setIsRestoring(false); }
+  }, [applyWorkspace]);
 
   const handleChooseFile = useCallback(() => {
     fileInputRef.current?.click();
@@ -436,7 +497,8 @@ export default function Home() {
     async (event: ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
       if (!file) return;
-      await loadWorkspace([{ file, path: file.name }], 'Single document');
+      try { await loadWorkspace([{ file, path: file.name }], 'Single document'); }
+      catch { setNotice('문서를 불러오지 못했습니다'); }
       event.target.value = '';
     },
     [loadWorkspace],
@@ -447,11 +509,11 @@ export default function Home() {
     if (directoryPicker.showDirectoryPicker) {
       try {
         const directory = await directoryPicker.showDirectoryPicker();
-        const entries = await collectFileEntries(directory);
+        const entries = await collectDirectoryFiles(directory, directory.name);
         await loadWorkspace(entries, directory.name);
       } catch (error) {
         if ((error as DOMException).name !== 'AbortError') {
-          setNotice('폴더를 불러오지 못했습니다');
+          setNotice((error as Error).message || '폴더를 불러오지 못했습니다');
         }
       }
       return;
@@ -467,7 +529,8 @@ export default function Home() {
         path: (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name,
       }));
       if (files.length === 0) return;
-      await loadWorkspace(files, getFolderNameFromPath(files[0].path));
+      try { await loadWorkspace(files, getFolderNameFromPath(files[0].path)); }
+      catch { setNotice('폴더를 불러오지 못했습니다'); }
       event.target.value = '';
     },
     [loadWorkspace],
@@ -476,20 +539,19 @@ export default function Home() {
   const handleDrop = useCallback(
     async (event: DragEvent<HTMLDivElement>) => {
       event.preventDefault();
-      if (isRestoring) return;
+      if (isRestoring || isClearingStorage) return;
       setIsDragging(false);
-      const files = Array.from(event.dataTransfer.files).map((file) => ({
-        file,
-        path: (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name,
-      }));
-      if (files.length === 0) return;
-      await loadWorkspace(files, getFolderNameFromPath(files[0].path));
+      try {
+        const files = await collectDroppedFiles(event.dataTransfer);
+        if (files.length === 0) { setNotice('지원하는 문서가 없습니다. 폴더 선택 버튼을 사용하세요'); return; }
+        await loadWorkspace(files, getFolderNameFromPath(files[0].path));
+      } catch (error) { setNotice((error as Error).message); }
     },
-    [loadWorkspace, isRestoring],
+    [loadWorkspace, isRestoring, isClearingStorage],
   );
 
   const handleSelectDocument = useCallback(async (file: WorkspaceFile) => {
-    if (isRestoring || file.kind !== 'markdown' || file.path === selectedDocumentPath) return;
+    if (isRestoring || isClearingStorage || file.kind !== 'markdown' || file.path === selectedDocumentPath) return;
     const selectionRevision = ++selectionRevisionRef.current;
     const source = Object.hasOwn(drafts, file.path) ? drafts[file.path] : await file.file.text();
     if (selectionRevision !== selectionRevisionRef.current) return;
@@ -497,7 +559,7 @@ export default function Home() {
     setSelectedDocumentPath(file.path);
     setMarkdown(source);
     setNotice(`${file.name} selected`);
-  }, [drafts, isRestoring, selectedDocumentPath]);
+  }, [drafts, isRestoring, isClearingStorage, selectedDocumentPath]);
 
   const waitForPreview = useCallback(async () => {
     if (isRestoring) return false;
@@ -507,26 +569,32 @@ export default function Home() {
       setNotice('순서도 렌더링 실패 또는 문서 변경으로 내보내기를 중단했습니다. 확인 후 다시 시도하세요');
       return false;
     }
-    return true;
+    try {
+      if (previewRef.current) await waitForPreviewAssets(previewRef.current);
+      if (revision !== renderRevisionRef.current) { setNotice('문서가 변경되었습니다. 다시 내보내세요'); return false; }
+      return true;
+    } catch (error) { setNotice((error as Error).message); return false; }
   }, [isRestoring]);
 
   const handleExportHtml = useCallback(async () => {
     if (!await waitForPreview()) return;
     const body = previewRef.current?.innerHTML ?? renderedHtml;
-    const html = await createStandaloneHtml({
-      assetUrlToFile,
-      body,
-      documentName: selectedDocument?.name,
-      documentTitle,
-      workspaceFiles,
-    });
-    downloadTextFile(
-      html,
-      `${documentTitle.toLowerCase().replace(/[^a-z0-9가-힣]+/gi, '-').replace(/^-|-$/g, '') || 'document'}.html`,
-      'text/html;charset=utf-8',
-    );
-    setNotice('Standalone HTML downloaded');
-  }, [assetUrlToFile, documentTitle, renderedHtml, selectedDocument?.name, workspaceFiles, waitForPreview]);
+    try {
+      const html = await createStandaloneHtml({
+        assetUrlToFile,
+        body,
+        documentName: selectedDocument?.name,
+        documentTitle,
+        workspaceFiles,
+      });
+      downloadTextFile(
+        html,
+        `${documentTitle.toLowerCase().replace(/[^a-z0-9가-힣]+/gi, '-').replace(/^-|-$/g, '') || 'document'}.html`,
+        'text/html;charset=utf-8',
+      );
+      setNotice('Standalone HTML downloaded');
+    } catch { setNotice('HTML을 내보내지 못했습니다. 다시 시도하세요'); }
+  }, [assetUrlToFile, documentTitle, renderedHtml, selectedDocument, workspaceFiles, waitForPreview]);
 
   const handleExportPdf = useCallback(async () => {
     if (!await waitForPreview()) return;
@@ -567,6 +635,7 @@ export default function Home() {
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
+      <style>{SHARED_PRINT_CSS}</style>
       <input
         ref={fileInputRef}
         accept=".md,.markdown,.mdx,text/markdown"
@@ -595,11 +664,11 @@ export default function Home() {
           <span>Local workspace</span>
         </div>
         <div className="topbar-open-actions">
-          <button className="ghost-button topbar-open-button" disabled={isRestoring} onClick={handleChooseFile} type="button">
+          <button className="ghost-button topbar-open-button" disabled={isRestoring || isClearingStorage} onClick={handleChooseFile} type="button">
             <FileIcon kind="markdown" size={15} />
             <span>Open file</span>
           </button>
-          <button className="ghost-button topbar-open-button" disabled={isRestoring} onClick={handleChooseFolder} type="button">
+          <button className="ghost-button topbar-open-button" disabled={isRestoring || isClearingStorage} onClick={handleChooseFolder} type="button">
             <FolderIcon size={15} />
             <span>Open folder</span>
           </button>
@@ -613,7 +682,7 @@ export default function Home() {
               <span className="eyebrow">WORKSPACE</span>
               <h1>{workspaceName}</h1>
             </div>
-            <button aria-label="폴더 다시 선택" className="icon-button" disabled={isRestoring} onClick={handleChooseFolder} type="button">
+            <button aria-label="폴더 다시 선택" className="icon-button" disabled={isRestoring || isClearingStorage} onClick={handleChooseFolder} type="button">
               <FolderIcon size={16} />
             </button>
           </div>
@@ -662,9 +731,20 @@ export default function Home() {
                 <button className={activeView === 'split' ? 'is-active' : ''} onClick={() => setActiveView('split')} type="button">Split</button>
                 <button className={activeView === 'preview' ? 'is-active' : ''} onClick={() => setActiveView('preview')} type="button">Preview</button>
               </div>
-              <button className="outline-button" disabled={isRestoring} onClick={handleExportHtml} type="button"><ArrowUpIcon size={14} /> HTML</button>
-              <button aria-label="PDF로 저장하기" className="primary-button" disabled={isRestoring} onClick={handleExportPdf} title="Print / Save as PDF" type="button"><DownloadIcon size={14} /> PDF</button>
+              <button className="outline-button" disabled={isRestoring || isClearingStorage} onClick={() => downloadTextFile(markdown, selectedDocument?.name ?? 'draft.md', 'text/markdown;charset=utf-8')} type="button">Markdown</button>
+              <button className="outline-button" disabled={isRestoring || isClearingStorage} onClick={handleExportHtml} type="button"><ArrowUpIcon size={14} /> HTML</button>
+              <button aria-label="PDF로 저장하기" className="primary-button" disabled={isRestoring || isClearingStorage} onClick={handleExportPdf} title="Print / Save as PDF" type="button"><DownloadIcon size={14} /> PDF</button>
             </div>
+          </div>
+
+          <div className="workspace-drafts">
+            <label htmlFor="recent-workspace">최근 작업 공간</label>
+            <select disabled={isRestoring || isClearingStorage} id="recent-workspace" value="" onChange={(event) => { if (event.target.value) void restoreRecent(event.target.value); }}>
+              <option value="">저장된 작업 열기</option>
+              {recentWorkspaces.map((entry) => <option key={entry.workspaceId} value={entry.workspaceId}>{entry.workspaceName} · {entry.selectedDocumentPath}</option>)}
+            </select>
+            <button className="outline-button" disabled={isRestoring || isClearingStorage} onClick={clearSavedWorkspaces} type="button">저장된 초안 모두 삭제</button>
+            <p>문서·이미지·순서도만 가져옵니다. 최대 50MB / 1,000개.</p>
           </div>
 
           <div className="document-heading-row">
@@ -685,10 +765,11 @@ export default function Home() {
                 <span className="panel-meta">{markdown.split('\n').length} lines</span>
               </div>
               <textarea
-                disabled={isRestoring}
+                disabled={isRestoring || isClearingStorage}
                 aria-label="Markdown source"
                 className="markdown-editor"
                 onChange={(event) => {
+                  setIsStoragePaused(false);
                   setSaveStatus('Saving locally…');
                   setDrafts((previous) => ({ ...previous, [selectedDocumentPath]: event.target.value }));
                   setMarkdown(event.target.value);
@@ -746,7 +827,7 @@ export default function Home() {
           <div className="inspector-section export-card">
             <div className="export-card-icon"><DownloadIcon size={17} /></div>
             <div><strong>Ready to publish</strong><span>Clean HTML and PDF exports include your local assets.</span></div>
-            <button disabled={isRestoring} onClick={handleExportHtml} type="button">Download HTML <ArrowUpIcon size={13} /></button>
+            <button disabled={isRestoring || isClearingStorage} onClick={handleExportHtml} type="button">Download HTML <ArrowUpIcon size={13} /></button>
           </div>
 
           <div className="drop-hint"><span className="drop-hint-icon"><FolderIcon size={14} /></span><span><strong>Tip</strong> Drop a Markdown file or document folder anywhere on this window.</span></div>

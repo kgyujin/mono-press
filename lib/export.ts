@@ -8,17 +8,11 @@
  * - 2026-10-08 | 순서도 페이지 잘림 수정 | 인쇄 높이 제한과 블록 배치 적용
  */
 
+import { SHARED_PRINT_CSS } from './print-styles.ts';
+
 import type { WorkspaceFile } from './workspace';
 
 export const EXPORT_DOCUMENT_CSS = `
-  @page {
-    size: A4;
-    margin: 22mm 17mm;
-    @top-left { color: #707070; content: var(--print-document-title); font: 8px/1.3 "SFMono-Regular", Consolas, monospace; }
-    @top-right { color: #707070; content: "mono-press / PDF"; font: 8px/1.3 "SFMono-Regular", Consolas, monospace; }
-    @bottom-left { color: #707070; content: var(--print-document-name); font: 8px/1.3 "SFMono-Regular", Consolas, monospace; }
-    @bottom-right { color: #707070; content: "mono-press · page " counter(page); font: 8px/1.3 "SFMono-Regular", Consolas, monospace; }
-  }
   :root { --print-document-title: "mono-press"; --print-document-name: "Untitled.md"; color-scheme: light; font-family: Inter, Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #171717; background: #fff; }
   body { margin: 0; background: #fff; color: #171717; line-height: 1.75; }
   .document { max-width: 760px; margin: 0 auto; padding: 72px 28px 96px; }
@@ -62,41 +56,7 @@ export const EXPORT_DOCUMENT_CSS = `
   .asset-missing { border: 1px dashed #9b9b9b; color: #595959; display: flex; gap: 10px; padding: 14px; }
   .asset-missing code { display: block; margin-top: 4px; font-size: 12px; }
   .asset-missing__icon { display: grid; place-items: center; flex: 0 0 20px; width: 20px; height: 20px; border: 1px solid #171717; border-radius: 50%; font-size: 12px; font-weight: 700; }
-  @media print {
-    html, body { background: #fff; }
-    .document { max-width: none; padding: 0; }
-    .print-title-block { border-bottom: 1px solid #dedede; display: block; margin: 0 0 25px; padding: 0 0 17px; break-after: avoid-page; page-break-after: avoid; }
-    .print-title-kicker { color: #707070; display: block; font: 8px/1.3 "SFMono-Regular", Consolas, monospace; letter-spacing: .1em; margin-bottom: 11px; }
-    .print-title-block h1 { font-size: 28px; letter-spacing: -.055em; line-height: 1.15; margin: 0; }
-    .print-title-block p { color: #707070; font: 9px/1.4 "SFMono-Regular", Consolas, monospace; margin: 8px 0 0; }
-    .document { -webkit-print-color-adjust: exact; print-color-adjust: exact; color: #292925; font-size: 12px; line-height: 1.62; }
-    .document p, .document ul, .document ol, .document blockquote { color: #292925; line-height: 1.62; }
-    .document pre { -webkit-print-color-adjust: exact; print-color-adjust: exact; background: #f2f2ef !important; border: 1px solid #d5d5cf; border-radius: 6px; color: #171717 !important; overflow: visible; padding: 11px 13px; white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; }
-    .document pre[data-language] { padding-top: 27px; }
-    .document pre[data-language]::before { color: #858585; }
-    .document pre code { color: inherit; }
-    .document pre .hljs-comment, .document pre .hljs-quote { color: #777; }
-    .document pre .hljs-keyword, .document pre .hljs-selector-tag, .document pre .hljs-literal, .document pre .hljs-type { color: #292929; }
-    .document pre .hljs-string, .document pre .hljs-doctag, .document pre .hljs-regexp, .document pre .hljs-template-tag { color: #555; }
-    .document pre .hljs-number, .document pre .hljs-symbol, .document pre .hljs-bullet, .document pre .hljs-built_in, .document pre .hljs-punctuation, .document pre .hljs-operator { color: #686868; }
-    .document pre .hljs-title, .document pre .hljs-title.class_, .document pre .hljs-title.function_, .document pre .hljs-section { color: #171717; }
-    .document pre .hljs-attr, .document pre .hljs-attribute, .document pre .hljs-variable, .document pre .hljs-template-variable, .document pre .hljs-params { color: #444; }
-    .document pre .hljs-meta, .document pre .hljs-tag, .document pre .hljs-name, .document pre .hljs-selector-class, .document pre .hljs-selector-id, .document pre .hljs-selector-pseudo, .document pre .hljs-selector-attr { color: #5e5e5e; }
-    .document pre .hljs-subst { color: #333; }
-    .document pre .hljs-addition { color: #333; }
-    .document pre .hljs-deletion { color: #767676; }
-    .document :not(pre) > code { color: #292925; }
-    .document table { font-size: 11px; }
-    .document img { max-height: 220mm; }
-    .document .diagram-shell { overflow: visible; }
-    .document .mermaid { display: block; min-width: 0; overflow: visible; padding: 12px 0 4px; }
-    /* A4 content height is 253mm; reserve room for the label, padding and borders.
-       Block layout avoids flex fragmentation when a diagram moves to the next page. */
-    .document .mermaid svg { display: block; width: 100%; height: auto; max-width: 100%; max-height: 220mm; margin: 0 auto; }
-    .document table { break-inside: auto; page-break-inside: auto; }
-    .document thead { display: table-header-group; }
-    .document tr { break-inside: avoid; page-break-inside: avoid; }
-  }
+  ${SHARED_PRINT_CSS}
 `;
 
 function escapeHtml(value: string): string {
@@ -117,7 +77,7 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
-async function inlineImages(
+async function inlineWorkspaceAssets(
   body: string,
   workspaceFiles: WorkspaceFile[],
   assetUrlToFile: Map<string, File>,
@@ -125,14 +85,21 @@ async function inlineImages(
   const wrapper = document.createElement('div');
   wrapper.innerHTML = body;
 
-  const images = Array.from(wrapper.querySelectorAll<HTMLImageElement>('img[src]'));
-  await Promise.all(
-    images.map(async (image) => {
-      const sourceFile = assetUrlToFile.get(image.src);
-      if (!sourceFile) return;
-      image.src = await fileToDataUrl(sourceFile);
-    }),
-  );
+  const dataUrls = new Map<File, Promise<string>>();
+  const assets = Array.from(wrapper.querySelectorAll<HTMLElement>('img[src], a[href]'));
+  await Promise.all(assets.map(async (asset) => {
+    const attribute = asset.tagName === 'IMG' ? 'src' : 'href';
+    const sourceFile = assetUrlToFile.get(asset.getAttribute(attribute) ?? '');
+    if (!sourceFile) return;
+    let encodedFile = dataUrls.get(sourceFile);
+    if (!encodedFile) {
+      encodedFile = fileToDataUrl(sourceFile);
+      dataUrls.set(sourceFile, encodedFile);
+    }
+    asset.setAttribute(attribute, await encodedFile);
+    // Browsers block top-level data URL navigation; download keeps original links usable.
+    if (attribute === 'href') asset.setAttribute('download', sourceFile.name);
+  }));
 
   // Keep the argument explicit so future exporters can add attachments without
   // changing the public export contract.
@@ -147,17 +114,24 @@ export async function createStandaloneHtml(options: {
   workspaceFiles: WorkspaceFile[];
   assetUrlToFile: Map<string, File>;
 }): Promise<string> {
-  const body = await inlineImages(
+  const body = await inlineWorkspaceAssets(
     options.body,
     options.workspaceFiles,
     options.assetUrlToFile,
   );
+  const exportedBody = document.createElement('div');
+  exportedBody.innerHTML = body;
+  const hasRemoteImages = Array.from(exportedBody.querySelectorAll('img[src]'))
+    .some((image) => /^https:\/\//i.test(image.getAttribute('src') ?? ''));
+  const dependencyNote = hasRemoteImages
+    ? '<aside class="export-dependency-note" role="note">이 문서에는 외부 HTTPS 이미지가 있습니다. 이미지를 표시하려면 인터넷 연결과 원본 서버 접근이 필요합니다.</aside>'
+    : '';
   const escapedTitle = escapeHtml(options.documentTitle);
   const printTitleValue = escapeHtml(JSON.stringify(options.documentTitle.replace(/[\r\n]+/g, ' ').trim()));
   const printDocumentNameValue = escapeHtml(JSON.stringify((options.documentName ?? options.documentTitle).replace(/[\r\n]+/g, ' ').trim()));
   const printTitleBlock = /<h1(?:\s|>)/i.test(body)
     ? ''
-    : `<section class="print-title-block"><span class="print-title-kicker">mono-press / DOCUMENT</span><h1>${escapedTitle}</h1><p>Standalone HTML export</p></section>`;
+    : `<section class="print-title-block"><span class="print-title-kicker">mono-press / DOCUMENT</span><h1>${escapedTitle}</h1><p>${escapeHtml(options.documentName ?? 'Untitled.md')}</p></section>`;
 
   return `<!doctype html>
 <html lang="ko" style="--print-document-title: ${printTitleValue}; --print-document-name: ${printDocumentNameValue};">
@@ -168,7 +142,7 @@ export async function createStandaloneHtml(options: {
     <style>${EXPORT_DOCUMENT_CSS}</style>
   </head>
   <body>
-    <main class="document">${printTitleBlock}${body}</main>
+    <main class="document">${dependencyNote}${printTitleBlock}${body}</main>
   </body>
 </html>`;
 }

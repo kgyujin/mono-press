@@ -35,6 +35,17 @@ function safeTitle(title: string | null | undefined): string {
   return title ? ` title="${escapeAttribute(title)}"` : '';
 }
 
+export function getSafeRemoteImageUrl(href: string): string | undefined {
+  try {
+    const imageUrl = new URL(href);
+    return imageUrl.protocol === 'https:' && !imageUrl.username && !imageUrl.password
+      ? imageUrl.href
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function isExternalLink(href: string): boolean {
   return /^(?:https?:|mailto:|tel:|#|\/\/)/i.test(href);
 }
@@ -47,7 +58,8 @@ export function renderMarkdown(
 
   renderer.image = ({ href, title, text }) => {
     const resolvedPath = resolveWorkspaceReference(options.documentPath, href);
-    const assetUrl = resolvedPath ? options.assetUrls.get(resolvedPath) : undefined;
+    const assetUrl = (resolvedPath ? options.assetUrls.get(resolvedPath) : undefined)
+      ?? getSafeRemoteImageUrl(href);
     const altText = escapeAttribute(text || '문서 이미지');
 
     if (!assetUrl) {
@@ -58,7 +70,7 @@ export function renderMarkdown(
     const caption = text
       ? `<figcaption>${escapeHtml(text)}</figcaption>`
       : '';
-    return `<figure class="document-figure"><img src="${escapeAttribute(assetUrl)}" alt="${altText}"${safeTitle(title)} loading="lazy" />${caption}</figure>`;
+    return `<figure class="document-figure"><img src="${escapeAttribute(assetUrl)}" alt="${altText}"${safeTitle(title)} loading="eager" referrerpolicy="no-referrer" />${caption}</figure>`;
   };
 
   renderer.link = ({ href, title, text }) => {
@@ -100,7 +112,7 @@ export function renderMarkdown(
   if (typeof window === 'undefined') return html;
 
   return DOMPurify.sanitize(html, {
-    ADD_ATTR: ['target', 'rel', 'loading', 'data-language'],
+    ADD_ATTR: ['target', 'rel', 'loading', 'data-language', 'referrerpolicy'],
     ALLOW_UNKNOWN_PROTOCOLS: false,
     ALLOWED_URI_REGEXP:
       /^(?:(?:https?|mailto|tel|blob):|[^a-z]|[a-z+.-]+(?:[^a-z+.-:]|$))/i,
