@@ -5,6 +5,7 @@
  * 변경사항 내역:
  * - 2026-08-26 | HTML 내보내기 | 이미지 data URL 내장과 인쇄 스타일 추가
  * - 2026-08-26 | PDF 출력 개선 | 인쇄 안전 색상과 문서 크롬 추가
+ * - 2026-10-08 | 순서도 페이지 잘림 수정 | 인쇄 높이 제한과 블록 배치 적용
  */
 
 import type { WorkspaceFile } from './workspace';
@@ -88,8 +89,10 @@ export const EXPORT_DOCUMENT_CSS = `
     .document table { font-size: 11px; }
     .document img { max-height: 220mm; }
     .document .diagram-shell { overflow: visible; }
-    .document .mermaid { min-width: 0; overflow: visible; padding: 12px 0 4px; }
-    .document .mermaid svg { height: auto; max-width: 100%; }
+    .document .mermaid { display: block; min-width: 0; overflow: visible; padding: 12px 0 4px; }
+    /* A4 content height is 253mm; reserve room for the label, padding and borders.
+       Block layout avoids flex fragmentation when a diagram moves to the next page. */
+    .document .mermaid svg { display: block; width: 100%; height: auto; max-width: 100%; max-height: 220mm; margin: 0 auto; }
     .document table { break-inside: auto; page-break-inside: auto; }
     .document thead { display: table-header-group; }
     .document tr { break-inside: avoid; page-break-inside: avoid; }

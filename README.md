@@ -81,11 +81,23 @@ flowchart LR
 | `npm run lint` | Check the project with ESLint |
 | `npm run build` | Create a Vercel-compatible Next.js production build |
 
+### Print regression test
+
+`npm test`는 단위 테스트를 실행합니다. 실제 Mermaid 렌더링과 PDF 페이지 나눔은 Chrome, Playwright, Poppler(`pdftotext`)가 설치된 환경에서 별도로 검증합니다.
+
+```bash
+node --experimental-strip-types --test tests/print-layout.browser.mjs
+```
+
+Playwright가 프로젝트 밖에 설치되어 있으면 `PLAYWRIGHT_MODULE` 환경변수로 해당 모듈의 절대 경로를 지정합니다. 검사 PDF는 시스템 임시 폴더에 저장되며 `PRINT_QA_DIR`로 위치를 지정할 수 있습니다. 앱/HTML 출력 각각에서 긴 순서도, 넓은 순서도, 페이지 경계, 작은 순서도를 확인합니다.
+
 ## PDF output
 
 `PDF` 버튼은 브라우저의 인쇄 대화상자를 열고, 문서 본문만 A4 인쇄 레이아웃으로 표시합니다. 대화상자에서 대상 프린터를 `Save as PDF`로 선택하고 배율은 100%로 두면 됩니다. mono-press가 문서 제목, 파일명, 페이지 번호를 인쇄용 헤더·푸터로 추가하므로 브라우저의 `Headers and footers` 옵션은 끄는 것을 권장합니다.
 
 코드 블록은 배경 그래픽 설정에 의존하지 않도록 흰색 바탕과 검은색 글자로 출력됩니다. 로컬 이미지와 Mermaid 다이어그램까지 포함하려면 단일 Markdown 파일이 아니라 해당 파일이 들어 있는 상위 폴더를 먼저 선택하세요.
+
+Mermaid 순서도는 인쇄할 때 비율을 유지하며 최대 높이 220mm로 축소하여 A4 한 페이지 안에 배치합니다. 현재 페이지에 공간이 부족하면 다음 페이지로 이동하며, 매우 긴 순서도는 글자가 작아질 수 있습니다. 이 규칙은 PDF 출력과 내보낸 HTML 인쇄에 동일하게 적용됩니다.
 
 문서 헤더·푸터와 페이지 번호는 Chromium 계열 브라우저에서 가장 안정적으로 표시됩니다.
 
