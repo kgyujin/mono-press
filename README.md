@@ -83,13 +83,24 @@ flowchart LR
 
 ### Print regression test
 
-`npm test`는 단위 테스트를 실행합니다. 실제 Mermaid 렌더링과 PDF 페이지 나눔은 Chrome, Playwright, Poppler(`pdftotext`)가 설치된 환경에서 별도로 검증합니다.
+`npm test`는 단위 테스트와 실제 Chrome 브라우저 회귀 테스트를 모두 실행합니다. 실행 환경에는 Google Chrome과 Poppler(`pdftotext`)가 필요합니다. Playwright는 개발 의존성으로 설치됩니다.
 
 ```bash
-node --experimental-strip-types --test tests/print-layout.browser.mjs
+npm ci
+npm test
+npm run test:unit     # 단위 테스트만 실행
+npm run test:browser  # 편집/복원/내보내기 및 PDF 인쇄 검사
 ```
 
-Playwright가 프로젝트 밖에 설치되어 있으면 `PLAYWRIGHT_MODULE` 환경변수로 해당 모듈의 절대 경로를 지정합니다. 검사 PDF는 시스템 임시 폴더에 저장되며 `PRINT_QA_DIR`로 위치를 지정할 수 있습니다. 앱/HTML 출력 각각에서 긴 순서도, 넓은 순서도, 페이지 경계, 작은 순서도를 확인합니다.
+인쇄 검사 PDF는 시스템 임시 폴더에 저장되며 `PRINT_QA_DIR`로 위치를 지정할 수 있습니다. 앱/HTML 출력 각각에서 긴 순서도, 넓은 순서도, 페이지 경계, 작은 순서도를 확인합니다. 편집기 검사는 로컬 포트 3187을 사용합니다.
+
+## Local drafts
+
+편집 내용과 연결된 파일은 현재 브라우저의 IndexedDB에 자동 저장됩니다. 같은 작업 공간에서 문서를 전환하거나 새로고침하면 복원됩니다. 원본 파일은 변경하지 않습니다. 새 파일/폴더를 열면 저장된 작업 공간이 교체됩니다.
+
+저장 완료 여부는 편집기 아래에 표시합니다. 브라우저가 저장을 차단하거나 용량이 부족하면 실패 메시지를 표시하며, 저장이 끝나지 않은 상태에서 창을 닫으려 하면 경고합니다. 브라우저 데이터 삭제 또는 시크릿 창 종료 후에는 복원할 수 없으므로 필요한 문서는 별도로 내보내세요.
+
+HTML/PDF 내보내기는 Mermaid 렌더링 완료를 기다립니다. 순서도 문법 오류가 있거나 대기 중 문서가 바뀌면 내보내기를 중단하고 안내합니다.
 
 ## PDF output
 

@@ -8,6 +8,7 @@
  * - 2026-08-26 | 제품 첫 버전 | 로컬 작업 공간과 HTML/PDF 내보내기 구현
  * - 2026-08-26 | 단일 문서 입력 지원 | Markdown 파일만 선택하는 입력 경로 추가
  * - 2026-08-26 | PDF 출력 개선 | 인쇄용 문서 크롬과 페이지 나눔 보강
+ * - 2026-10-08 | 편집 안정성 | 초안 저장·복원과 렌더링 완료 후 내보내기
  * - 2026-08-26 | 브랜드 마크 정리 | Markdown과 press line을 결합한 mono-press 심볼 적용
  */
 
@@ -22,6 +23,7 @@ import {
   type DragEvent,
 } from 'react';
 
+import { loadDraftWorkspace, saveDraftWorkspace } from '@/lib/drafts';
 import { createStandaloneHtml, downloadTextFile } from '@/lib/export';
 import { getDocumentTitle, renderMarkdown } from '@/lib/markdown';
 import {
@@ -252,9 +254,49 @@ export default function Home() {
   const [activeView, setActiveView] = useState<'split' | 'preview'>('split');
   const [notice, setNotice] = useState('Demo workspace loaded');
   const [isDragging, setIsDragging] = useState(false);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [isRestoring, setIsRestoring] = useState(true);
+  const [saveStatus, setSaveStatus] = useState('Restoring local draft…');
+  const renderPromiseRef = useRef<Promise<boolean>>(Promise.resolve(true));
+  const renderRevisionRef = useRef(0);
+  const selectionRevisionRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   const previewRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadDraftWorkspace().then((snapshot) => {
+      if (cancelled || !snapshot) return;
+      setWorkspaceFiles(snapshot.workspaceFiles);
+      setWorkspaceName(snapshot.workspaceName);
+      setSelectedDocumentPath(snapshot.selectedDocumentPath);
+      setDrafts(snapshot.drafts);
+      setMarkdown(snapshot.markdown);
+      setNotice('Local draft restored');
+    }).catch(() => {
+      if (!cancelled) setNotice('저장된 초안을 복원하지 못했습니다');
+    }).finally(() => {
+      if (!cancelled) setIsRestoring(false);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (isRestoring) return;
+    let cancelled = false;
+    void saveDraftWorkspace({ workspaceFiles, workspaceName, selectedDocumentPath, drafts, markdown })
+      .then(() => { if (!cancelled) setSaveStatus('Saved locally'); })
+      .catch(() => { if (!cancelled) setSaveStatus('저장 실패 — 이 창을 닫지 말고 HTML로 내보내세요'); });
+    return () => { cancelled = true; };
+  }, [workspaceFiles, workspaceName, selectedDocumentPath, drafts, markdown, isRestoring]);
+
+  useEffect(() => {
+    if (saveStatus === 'Saved locally') return;
+    const warnBeforeClose = (event: BeforeUnloadEvent) => { event.preventDefault(); };
+    window.addEventListener('beforeunload', warnBeforeClose);
+    return () => window.removeEventListener('beforeunload', warnBeforeClose);
+  }, [saveStatus]);
 
   useEffect(() => {
     // Safari and Firefox do not expose the directory picker method, so the
@@ -332,7 +374,7 @@ export default function Home() {
 
     preview.innerHTML = renderedHtml;
     const diagrams = Array.from(preview.querySelectorAll<HTMLElement>('.mermaid'));
-    if (diagrams.length === 0) return;
+    const revision = ++renderRevisionRef.current;
 
     mermaid.initialize({
       startOnLoad: false,
@@ -352,14 +394,21 @@ export default function Home() {
       },
     });
 
-    void mermaid.run({ nodes: diagrams }).catch(() => {
-      diagrams.forEach((diagram) => {
-        diagram.classList.add('mermaid-error');
-      });
+    // Serialize Mermaid's shared renderer and ignore work for detached previews.
+    renderPromiseRef.current = renderPromiseRef.current.then(async () => {
+      if (revision !== renderRevisionRef.current) return false;
+      try {
+        if (diagrams.length) await mermaid.run({ nodes: diagrams });
+        return revision === renderRevisionRef.current;
+      } catch {
+        diagrams.forEach((diagram) => diagram.classList.add('mermaid-error'));
+        return false;
+      }
     });
   }, [renderedHtml]);
 
   const loadWorkspace = useCallback(async (importedFiles: ImportedFile[], name: string) => {
+    const selectionRevision = ++selectionRevisionRef.current;
     const normalizedFiles = normalizeImportedFiles(importedFiles);
     const firstDocument = normalizedFiles.find((file) => file.kind === 'markdown');
 
@@ -368,10 +417,14 @@ export default function Home() {
       return;
     }
 
+    const source = await firstDocument.file.text();
+    if (selectionRevision !== selectionRevisionRef.current) return;
+    setDrafts({});
+    setSaveStatus('Saving locally…');
     setWorkspaceFiles(normalizedFiles);
     setWorkspaceName(name || getFolderNameFromPath(firstDocument.path));
     setSelectedDocumentPath(firstDocument.path);
-    setMarkdown(await firstDocument.file.text());
+    setMarkdown(source);
     setNotice(`${normalizedFiles.length} ${normalizedFiles.length === 1 ? 'file' : 'files'} connected`);
   }, []);
 
@@ -423,6 +476,7 @@ export default function Home() {
   const handleDrop = useCallback(
     async (event: DragEvent<HTMLDivElement>) => {
       event.preventDefault();
+      if (isRestoring) return;
       setIsDragging(false);
       const files = Array.from(event.dataTransfer.files).map((file) => ({
         file,
@@ -431,17 +485,33 @@ export default function Home() {
       if (files.length === 0) return;
       await loadWorkspace(files, getFolderNameFromPath(files[0].path));
     },
-    [loadWorkspace],
+    [loadWorkspace, isRestoring],
   );
 
   const handleSelectDocument = useCallback(async (file: WorkspaceFile) => {
-    if (file.kind !== 'markdown') return;
+    if (isRestoring || file.kind !== 'markdown' || file.path === selectedDocumentPath) return;
+    const selectionRevision = ++selectionRevisionRef.current;
+    const source = Object.hasOwn(drafts, file.path) ? drafts[file.path] : await file.file.text();
+    if (selectionRevision !== selectionRevisionRef.current) return;
+    setSaveStatus('Saving locally…');
     setSelectedDocumentPath(file.path);
-    setMarkdown(await file.file.text());
+    setMarkdown(source);
     setNotice(`${file.name} selected`);
-  }, []);
+  }, [drafts, isRestoring, selectedDocumentPath]);
+
+  const waitForPreview = useCallback(async () => {
+    if (isRestoring) return false;
+    const revision = renderRevisionRef.current;
+    const success = await renderPromiseRef.current;
+    if (!success || revision !== renderRevisionRef.current) {
+      setNotice('순서도 렌더링 실패 또는 문서 변경으로 내보내기를 중단했습니다. 확인 후 다시 시도하세요');
+      return false;
+    }
+    return true;
+  }, [isRestoring]);
 
   const handleExportHtml = useCallback(async () => {
+    if (!await waitForPreview()) return;
     const body = previewRef.current?.innerHTML ?? renderedHtml;
     const html = await createStandaloneHtml({
       assetUrlToFile,
@@ -456,9 +526,10 @@ export default function Home() {
       'text/html;charset=utf-8',
     );
     setNotice('Standalone HTML downloaded');
-  }, [assetUrlToFile, documentTitle, renderedHtml, selectedDocument?.name, workspaceFiles]);
+  }, [assetUrlToFile, documentTitle, renderedHtml, selectedDocument?.name, workspaceFiles, waitForPreview]);
 
-  const handleExportPdf = useCallback(() => {
+  const handleExportPdf = useCallback(async () => {
+    if (!await waitForPreview()) return;
     const previousTitle = document.title;
     document.title = `${documentTitle} · mono-press`;
     window.print();
@@ -466,7 +537,7 @@ export default function Home() {
       document.title = previousTitle;
     }, 1000);
     setNotice('Print dialog opened — choose Save as PDF');
-  }, [documentTitle]);
+  }, [documentTitle, waitForPreview]);
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
@@ -524,11 +595,11 @@ export default function Home() {
           <span>Local workspace</span>
         </div>
         <div className="topbar-open-actions">
-          <button className="ghost-button topbar-open-button" onClick={handleChooseFile} type="button">
+          <button className="ghost-button topbar-open-button" disabled={isRestoring} onClick={handleChooseFile} type="button">
             <FileIcon kind="markdown" size={15} />
             <span>Open file</span>
           </button>
-          <button className="ghost-button topbar-open-button" onClick={handleChooseFolder} type="button">
+          <button className="ghost-button topbar-open-button" disabled={isRestoring} onClick={handleChooseFolder} type="button">
             <FolderIcon size={15} />
             <span>Open folder</span>
           </button>
@@ -542,7 +613,7 @@ export default function Home() {
               <span className="eyebrow">WORKSPACE</span>
               <h1>{workspaceName}</h1>
             </div>
-            <button aria-label="폴더 다시 선택" className="icon-button" onClick={handleChooseFolder} type="button">
+            <button aria-label="폴더 다시 선택" className="icon-button" disabled={isRestoring} onClick={handleChooseFolder} type="button">
               <FolderIcon size={16} />
             </button>
           </div>
@@ -591,8 +662,8 @@ export default function Home() {
                 <button className={activeView === 'split' ? 'is-active' : ''} onClick={() => setActiveView('split')} type="button">Split</button>
                 <button className={activeView === 'preview' ? 'is-active' : ''} onClick={() => setActiveView('preview')} type="button">Preview</button>
               </div>
-              <button className="outline-button" onClick={handleExportHtml} type="button"><ArrowUpIcon size={14} /> HTML</button>
-              <button aria-label="PDF로 저장하기" className="primary-button" onClick={handleExportPdf} title="Print / Save as PDF" type="button"><DownloadIcon size={14} /> PDF</button>
+              <button className="outline-button" disabled={isRestoring} onClick={handleExportHtml} type="button"><ArrowUpIcon size={14} /> HTML</button>
+              <button aria-label="PDF로 저장하기" className="primary-button" disabled={isRestoring} onClick={handleExportPdf} title="Print / Save as PDF" type="button"><DownloadIcon size={14} /> PDF</button>
             </div>
           </div>
 
@@ -614,16 +685,19 @@ export default function Home() {
                 <span className="panel-meta">{markdown.split('\n').length} lines</span>
               </div>
               <textarea
+                disabled={isRestoring}
                 aria-label="Markdown source"
                 className="markdown-editor"
                 onChange={(event) => {
+                  setSaveStatus('Saving locally…');
+                  setDrafts((previous) => ({ ...previous, [selectedDocumentPath]: event.target.value }));
                   setMarkdown(event.target.value);
                   setNotice('Local draft updated');
                 }}
                 spellCheck={false}
                 value={markdown}
               />
-              <div className="editor-footer"><span>Markdown + GFM</span><span>Autosaved locally</span></div>
+              <div className="editor-footer"><span>Markdown + GFM</span><span role="status">{saveStatus}</span></div>
             </section>
 
             <section className="preview-panel" aria-label="HTML 문서 미리보기">
@@ -672,7 +746,7 @@ export default function Home() {
           <div className="inspector-section export-card">
             <div className="export-card-icon"><DownloadIcon size={17} /></div>
             <div><strong>Ready to publish</strong><span>Clean HTML and PDF exports include your local assets.</span></div>
-            <button onClick={handleExportHtml} type="button">Download HTML <ArrowUpIcon size={13} /></button>
+            <button disabled={isRestoring} onClick={handleExportHtml} type="button">Download HTML <ArrowUpIcon size={13} /></button>
           </div>
 
           <div className="drop-hint"><span className="drop-hint-icon"><FolderIcon size={14} /></span><span><strong>Tip</strong> Drop a Markdown file or document folder anywhere on this window.</span></div>

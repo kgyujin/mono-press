@@ -52,3 +52,13 @@ test('reports image references that are outside the loaded workspace', () => {
     ['assets/missing.png'],
   );
 });
+
+test('resolves encoded spaces, Korean, hash and percent filenames without double decoding', () => {
+  assert.equal(resolveWorkspaceReference('guide.md', 'images/my%20chart.png'), 'images/my chart.png');
+  assert.equal(resolveWorkspaceReference('guide.md', 'images/%ED%95%9C%EA%B8%80.png'), 'images/한글.png');
+  assert.equal(resolveWorkspaceReference('guide.md', 'images/a%23b.png?v=1#preview'), 'images/a#b.png');
+  assert.equal(resolveWorkspaceReference('guide.md', 'images/a%2520b.png'), 'images/a%20b.png');
+  assert.equal(resolveWorkspaceReference('guide.md', 'images/100%.png'), 'images/100%.png');
+  const files = normalizeImportedFiles([{ file: new File([''], 'my chart.png'), path: 'images/my chart.png' }, { file: new File([''], 'guide.md'), path: 'guide.md' }]);
+  assert.deepEqual(findMissingAssetReferences('![chart](images/my%20chart.png)', 'guide.md', files), []);
+});

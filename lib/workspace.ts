@@ -114,7 +114,15 @@ export function resolveWorkspaceReference(
 
   const [pathPart] = trimmed.split(/[?#]/, 1);
   const baseSegments = getDirectoryPath(documentPath).split('/').filter(Boolean);
-  const referenceSegments = pathPart.replace(/^\//, '').split('/');
+  // Decode after removing query/fragment so encoded # and ? remain filename characters.
+  let decodedPath: string;
+  try {
+    decodedPath = decodeURIComponent(pathPart);
+  } catch {
+    // A literal percent or malformed escape must not crash the document renderer.
+    decodedPath = pathPart;
+  }
+  const referenceSegments = decodedPath.replace(/^\//, '').split('/');
   const segments = [...baseSegments];
 
   referenceSegments.forEach((segment) => {
